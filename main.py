@@ -1,83 +1,34 @@
-#!/usr/bin/env python
-
-"""code template"""
-
 import os
 import random
 import numpy as np
 import cv2
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.datasets import make_classification
 from sklearn.metrics import confusion_matrix
-import pandas
-
-# translation of 43 classes to 3 classes:
-# 0 - prohibitory
-# 1 - warning
-# 2 - mandatory
-# -1 - not used
-class_id_to_new_class_id = {0: 0,
-                            1: 0,
-                            2: 0,
-                            3: 0,
-                            4: 0,
-                            5: 0,
-                            6: -1,
-                            7: 0,
-                            8: 0,
-                            9: 0,
-                            10: 0,
-                            11: 1,
-                            12: -1,
-                            13: 1,
-                            14: 0,
-                            15: 0,
-                            16: 0,
-                            17: 0,
-                            18: 1,
-                            19: 1,
-                            20: 1,
-                            21: 1,
-                            22: 1,
-                            23: 1,
-                            24: 1,
-                            25: 1,
-                            26: 1,
-                            27: 1,
-                            28: 1,
-                            29: 1,
-                            30: 1,
-                            31: 1,
-                            32: -1,
-                            33: 2,
-                            34: 2,
-                            35: 2,
-                            36: 2,
-                            37: 2,
-                            38: 2,
-                            39: 2,
-                            40: 2,
-                            41: -1,
-                            42: -1}
+from sklearn.model_selection import train_test_split
+import xml.etree.ElementTree as ET
 
 
-def load_data(path, filename):
-    """
-    Loads data from disk.
-    @param path: Path to dataset directory.
-    @param filename: Filename of csv file with information about samples.
-    @return: List of dictionaries, one for every sample, with entries "image" (np.array with image) and "label" (class_id).
-    """
-    entry_list = pandas.read_csv(os.path.join(path, filename))
+def load_data(path):
 
     data = []
-    for idx, entry in entry_list.iterrows():
-        class_id = class_id_to_new_class_id[entry['ClassId']]
-        image_path = entry['Path']
-
-        if class_id != -1:
+    os.chdir(r"..\dataset\annotations")
+    for subdir, dirs, files in os.walk('.', topdown=False):
+        for file in files:
+            tree = ET.parse(os.path.join(subdir, file))
+            root = tree.getroot()
+            class_id = ''
+            image_file_name = root.find('filename').text
+            for child in root.findall('object'):
+                class_id = child.find('name').text
+            os.chdir(r"..\images")
+            image_path = r'{}'.format(image_file_name)
             image = cv2.imread(os.path.join(path, image_path))
-            data.append({'image': image, 'label': class_id})
+            num_class_id = 0
+            if class_id == 'crosswalk':
+                num_class_id = 1
+            data.append({'image': image, 'label': num_class_id})
+            os.chdir(r"..\annotations")
+    os.chdir(r"..\..\WdSI_Projekt")
 
     return data
 
@@ -116,11 +67,9 @@ def extract_features(data):
     vocabulary = np.load('voc.npy')
     bow.setVocabulary(vocabulary)
     for sample in data:
-        # compute descriptor and add it as "desc" entry in sample
-        # TODO PUT YOUR CODE HERE
         key_points = sift.detect(sample['image'], None)  # algorytm, ktory bedzie nam szukal cech na danym obrazku
         desc = bow.compute(sample['image'], key_points)  # algorytm, ktory dla danego obrazku policzy nam deskryptory
-        sample['desc'] = desc  #
+        sample['desc'] = desc
         # ------------------
 
     return data
@@ -133,9 +82,6 @@ def train(data):
                     "desc" (np.array with descriptor).
     @return: Trained model.
     """
-    # train random forest model and return it from function.
-    # TODO PUT YOUR CODE HERE
-    # X, Y = make_classification(len(data))
     descs = []
     labels = []
     for sample in data:
@@ -187,15 +133,12 @@ def predict(rf, data):
                     "desc" (np.array with descriptor).
     @return: Data with added predicted labels for each sample.
     """
-    # perform prediction using trained model and add results as "label_pred" (int) entry in sample
-    # TODO PUT YOUR CODE HERE
     descs = []
     labels = []
     for idx, sample in enumerate(data):  # idx - index
         if sample['desc'] is not None:
             pred = rf.predict(sample['desc'])
-            sample['label_pred'] = int(
-                pred)  # rzutujemy na inta, bo dataframe jest uposledzony i dataframe nadpisuje typy zmiennych na podstawie typow pierwszych paru wartosci
+            sample['label_pred'] = pred  # rzutujemy na inta, bo dataframe jest uposledzony i dataframe nadpisuje typy zmiennych na podstawie typow pierwszych paru wartosci
     # ------------------
 
     return data
@@ -208,8 +151,6 @@ def evaluate(data):
                     "desc" (np.array with descriptor), and "label_pred".
     @return: Nothing.
     """
-    # evaluate classification results and print statistics
-    # TODO PUT YOUR CODE HERE
     positives = 0
     negatives = 0
     pred_labels = []
@@ -225,10 +166,9 @@ def evaluate(data):
     # ------------------
     accuracy = positives / (positives + negatives)
     print(accuracy)
-    #mAP = TP/TP+FP
     conf_matrix = confusion_matrix(true_labels, pred_labels)
     print(conf_matrix)
-    # this function does not return anything
+
     return
 
 
@@ -239,7 +179,7 @@ def display(data):
                     "desc" (np.array with descriptor), and "label_pred".
     @return: Nothing.
     """
-    n_classes = 3
+    n_classes = 2
 
     corr = {}
     incorr = {}
@@ -247,13 +187,13 @@ def display(data):
     for idx, sample in enumerate(data):
         if sample['desc'] is not None:
             if sample['label_pred'] == sample['label']:
-                if sample['label_pred'] not in corr:
-                    corr[sample['label_pred']] = []
-                corr[sample['label_pred']].append(idx)
+                if sample['label_pred'].item() not in corr:
+                    corr[sample['label_pred'].item()] = []
+                corr[sample['label_pred'].item()].append(idx)
             else:
-                if sample['label_pred'] not in incorr:
-                    incorr[sample['label_pred']] = []
-                incorr[sample['label_pred']].append(idx)
+                if sample['label_pred'].item() not in incorr:
+                    incorr[sample['label_pred'].item()] = []
+                incorr[sample['label_pred'].item()].append(idx)
 
             # print('ground truth = %s, predicted = %s' % (sample['label'], pred))
             # cv2.imshow('image', sample['image'])
@@ -281,7 +221,6 @@ def display(data):
     cv2.imshow('images incorrect', image_incorr)
     cv2.waitKey()
 
-    # this function does not return anything
     return
 
 
@@ -291,15 +230,16 @@ def display_dataset_stats(data):
     @param data: List of dictionaries, one for every sample, with entry "label" (class_id).
     @return: Nothing
     """
-    class_to_num = {}
+    class_to_num = {'crosswalk': 0,
+                    "other": 0}
     for idx, sample in enumerate(data):
         class_id = sample['label']
-        if class_id not in class_to_num:
-            class_to_num[class_id] = 0
-        class_to_num[class_id] += 1
+        if class_id == 1:
+            class_to_num['crosswalk'] +=1
+        else:
+            class_to_num['other'] +=1
 
     class_to_num = dict(sorted(class_to_num.items(), key=lambda item: item[0]))
-    # print('number of samples for each class:')
     print(class_to_num)
 
 
@@ -316,19 +256,13 @@ def balance_dataset(data, ratio):
 
 
 def main():
-    data_train = load_data('./', 'Train.csv')
-    print('train dataset before balancing:')
-    display_dataset_stats(data_train)
-    data_train = balance_dataset(data_train, 1.0)
-    print('train dataset after balancing:')
-    display_dataset_stats(data_train)
-
-    data_test = load_data('./', 'Test.csv')
-    print('test dataset before balancing:')
-    display_dataset_stats(data_test)
-    data_test = balance_dataset(data_test, 1.0)
-    print('test dataset after balancing:')
-    display_dataset_stats(data_test)
+    data = load_data('./')
+    print('dataset before balancing:')
+    display_dataset_stats(data)
+    data = balance_dataset(data, 1.0)
+    print('dataset after balancing:')
+    display_dataset_stats(data)
+    data_train, data_test = train_test_split(data, test_size=0.3, random_state=42)
 
     # you can comment those lines after dictionary is learned and saved to disk.
     print('learning BoVW')
