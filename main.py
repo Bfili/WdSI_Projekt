@@ -11,27 +11,62 @@ import xml.etree.ElementTree as ET
 def load_data(path):
 
     data = []
+    info_data = []
     os.chdir(r"..\dataset\annotations")
     for subdir, dirs, files in os.walk('.', topdown=False):
         for file in files:
             tree = ET.parse(os.path.join(subdir, file))
             root = tree.getroot()
             class_id = ''
+            info_data_dict = {}
             image_file_name = root.find('filename').text
+            info_data_dict = {'filename': image_file_name,
+                              'number_of_objects': len(root.findall('object')),
+                              'coordinates': []}
+            height = 0
+            width = 0
+            for child in root.findall('size'):
+                height = child.find('height').text
+                width = child.find('width').text
+
             for child in root.findall('object'):
                 class_id = child.find('name').text
-            os.chdir(r"..\images")
-            image_path = r'{}'.format(image_file_name)
-            image = cv2.imread(os.path.join(path, image_path))
-            num_class_id = 0
-            if class_id == 'crosswalk':
-                num_class_id = 1
-            data.append({'image': image, 'label': num_class_id})
-            os.chdir(r"..\annotations")
+                X1, X2, Y1, Y2 = 0, 0, 0, 0
+                for coordinate in child.findall('bndbox'):
+                    X1 = coordinate.find('xmin').text
+                    X2 = coordinate.find('xmax').text
+                    Y1 = coordinate.find('ymin').text
+                    Y2 = coordinate.find('ymax').text
+                object_width = float(X2) - float(X1)
+                object_height = float(Y2) - float(Y1)
+                if object_width > 0.1*float(width) and object_height > 0.1*float(height):
+                    info_data_dict['coordinates'].append([X1, X2, Y1, Y2])
+                    os.chdir(r"..\images")
+                    image_path = r'{}'.format(image_file_name)
+                    image = cv2.imread(os.path.join(path, image_path))
+                    cropped_im = image[int(Y1):int(Y2), int(X1):int(X2)]
+                    num_class_id = 0
+                    if class_id == 'crosswalk':
+                        num_class_id = 1
+                    data.append({'image': cropped_im, 'label': num_class_id})
+                    info_data.append(info_data_dict)
+                    os.chdir(r"..\annotations")
+                else:
+                    info_data_dict['number_of_objects'] -= 1
     os.chdir(r"..\..\WdSI_Projekt")
+    return data, info_data
 
-    return data
 
+def print_test_data(data):
+
+    for dict in data:
+        print(dict['filename'])
+        print(dict['number_of_objects'])
+        for xy in dict['coordinates']:
+            for element in xy:
+                print(element, end=" ")
+            print()
+    return
 
 def learn_bovw(data):
     """
@@ -138,7 +173,7 @@ def predict(rf, data):
     for idx, sample in enumerate(data):  # idx - index
         if sample['desc'] is not None:
             pred = rf.predict(sample['desc'])
-            sample['label_pred'] = pred  # rzutujemy na inta, bo dataframe jest uposledzony i dataframe nadpisuje typy zmiennych na podstawie typow pierwszych paru wartosci
+            sample['label_pred'] = pred
     # ------------------
 
     return data
@@ -256,13 +291,15 @@ def balance_dataset(data, ratio):
 
 
 def main():
-    data = load_data('./')
+    data, info_data = load_data('./')
     print('dataset before balancing:')
     display_dataset_stats(data)
     data = balance_dataset(data, 1.0)
     print('dataset after balancing:')
     display_dataset_stats(data)
-    data_train, data_test = train_test_split(data, test_size=0.3, random_state=42)
+    data_train, data_test, info_data_train, info_data_test = train_test_split(data, info_data, test_size=0.3, random_state=42)
+
+    print_test_data(info_data_test)
 
     # you can comment those lines after dictionary is learned and saved to disk.
     print('learning BoVW')
