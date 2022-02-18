@@ -12,9 +12,10 @@ def load_data(path):
 
     data = []
     info_data = []
-    os.chdir(r"..\dataset\annotations")
+    os.chdir(r".\dataset\annotations")
     for subdir, dirs, files in os.walk('.', topdown=False):
         for file in files:
+            print(file)
             tree = ET.parse(os.path.join(subdir, file))
             root = tree.getroot()
             class_id = ''
@@ -53,7 +54,7 @@ def load_data(path):
                     os.chdir(r"..\annotations")
                 else:
                     info_data_dict['number_of_objects'] -= 1
-    os.chdir(r"..\..\WdSI_Projekt")
+    os.chdir(r"..\..")
     return data, info_data
 
 
