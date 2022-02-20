@@ -169,8 +169,6 @@ def predict(rf, data):
                     "desc" (np.array with descriptor).
     @return: Data with added predicted labels for each sample.
     """
-    descs = []
-    labels = []
     for idx, sample in enumerate(data):  # idx - index
         if sample['desc'] is not None:
             pred = rf.predict(sample['desc'])
@@ -204,6 +202,10 @@ def evaluate(data):
     print(accuracy)
     conf_matrix = confusion_matrix(true_labels, pred_labels)
     print(conf_matrix)
+    avg_precision = conf_matrix[1][1]/(conf_matrix[1][1]+conf_matrix[0][1])
+    print("Average precision: ", avg_precision)
+    avg_recall = conf_matrix[1][1]/(conf_matrix[1][1]+conf_matrix[1][0])
+    print("Recall: ", avg_recall)
 
     return
 
